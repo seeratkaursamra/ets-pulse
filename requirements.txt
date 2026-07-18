@@ -1,0 +1,10 @@
+streamlit==1.40.2
+pandas==2.2.3
+requests==2.32.3
+plotly==5.24.1
+protobuf==5.29.1
+gtfs-realtime-bindings==1.0.0
+sqlalchemy==2.0.36
+python-dotenv==1.0.1
+pydeck==0.9.1
+watchdog==6.0.0

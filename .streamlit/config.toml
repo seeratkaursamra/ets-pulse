@@ -1,0 +1,18 @@
+[theme]
+base = "light"
+primaryColor = "#0b6e4f"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f8"
+textColor = "#1c2b33"
+font = "sans serif"
+
+[server]
+headless = true
+# Disable the file watcher: its native/polling backend can segfault Python on
+# macOS ("Python quit unexpectedly", exit 139). Restart the server manually
+# after code changes instead.
+fileWatcherType = "none"
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
