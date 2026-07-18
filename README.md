@@ -226,6 +226,3 @@ Released under the MIT License.
 
 ---
 
-<div align="center">
-Built by <strong>Seerat</strong> · data from the City of Edmonton Open Data program
-</div>
