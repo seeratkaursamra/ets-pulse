@@ -1,26 +1,20 @@
-"""Central configuration for ETS Pulse.
-
-Keeps feed URLs, delay thresholds, and filesystem paths in one place so the
-collection scripts, analytics layer, and dashboard all agree on the rules.
-"""
+"""Shared settings: feed URLs, delay thresholds, and paths."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-# --- Paths -----------------------------------------------------------------
+# paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
 STATIC_DIR = DATA_DIR / "static"
 DB_PATH = Path(os.getenv("ETS_DB_PATH", DATA_DIR / "ets_delays.db"))
 
-# --- Timezone --------------------------------------------------------------
-# Edmonton is Mountain Time. We store timestamps in UTC internally but reason
-# about "service day" and local hour using this zone.
+# Edmonton is Mountain Time. Timestamps are stored in UTC and converted to this
+# zone when we need the local hour or service day.
 LOCAL_TZ = "America/Edmonton"
 
-# --- GTFS feed URLs (Edmonton Transit Service) -----------------------------
-# Realtime feeds describe "now"; ETS Pulse collects snapshots to build history.
+# GTFS feeds (Edmonton Transit). Realtime only shows "now", so we snapshot it.
 GTFS_STATIC_URL = os.getenv(
     "ETS_GTFS_STATIC_URL",
     "https://gtfs.edmonton.ca/TMGTFSRealTimeWebService/GTFS/gtfs.zip",
@@ -38,14 +32,10 @@ RT_ALERTS_URL = os.getenv(
     "http://gtfs.edmonton.ca/TMGTFSRealTimeWebService/Alert/Alerts.pb",
 )
 
-# --- Delay methodology -----------------------------------------------------
-# delay_seconds = predicted_arrival - scheduled_arrival
-# Positive => late, negative => early.
-# Thresholds (seconds) from the project blueprint.
-EARLY_MAX = -60          # < -60s  => early
-ON_TIME_MAX = 120        # -60..+120s => on time
-SLIGHT_DELAY_MAX = 300   # +121..+300s => slight delay
-# > +300s => major delay
+# delay = predicted - scheduled (positive is late). Thresholds in seconds.
+EARLY_MAX = -60          # below this: early
+ON_TIME_MAX = 120        # up to +2 min: on time
+SLIGHT_DELAY_MAX = 300   # up to +5 min: slight delay, above that: major
 
 STATUS_EARLY = "Early"
 STATUS_ON_TIME = "On time"
@@ -53,18 +43,18 @@ STATUS_SLIGHT = "Slight delay"
 STATUS_MAJOR = "Major delay"
 STATUS_UNKNOWN = "Unknown"
 
-# A "late" observation for headline stats: slight or major delay.
-LATE_THRESHOLD_SECONDS = ON_TIME_MAX  # anything above +120s counts as late
+# anything more than 2 min late counts as "late" for headline numbers
+LATE_THRESHOLD_SECONDS = ON_TIME_MAX
 
-# Sample-size guardrail: warn when aggregates are based on fewer than this.
+# warn about averages built on fewer observations than this
 MIN_CONFIDENT_OBSERVATIONS = 30
 
 
 def classify_delay(delay_seconds) -> str:
-    """Map a delay in seconds to a human-readable status.
+    """Turn a delay in seconds into a status label.
 
-    A missing/None delay is Unknown and must never be treated as on time,
-    otherwise route performance is falsely improved.
+    None stays Unknown. Don't ever treat a missing value as on time, or the
+    numbers end up looking better than reality.
     """
     if delay_seconds is None:
         return STATUS_UNKNOWN
