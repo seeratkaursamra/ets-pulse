@@ -1,6 +1,6 @@
-"""Shared Streamlit UI helpers: data loading, filters, formatting, theming.
+"""Shared Streamlit bits: data loading, filters, formatting, colors.
 
-Pages import from here so the look, filters, and caching stay consistent.
+Pages import from here so filtering, caching and the look stay consistent.
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import streamlit as st
 
 from . import analytics, config, database
 
-# Consistent colors for delay status across every chart/map.
+# status colors used across the charts and maps
 STATUS_COLORS = {
     config.STATUS_ON_TIME: "#0b6e4f",
     config.STATUS_EARLY: "#3b82f6",
@@ -18,7 +18,7 @@ STATUS_COLORS = {
     config.STATUS_UNKNOWN: "#9ca3af",
 }
 
-# RGB versions for pydeck map layers.
+# same colors as RGB for the pydeck layers
 STATUS_RGB = {
     config.STATUS_ON_TIME: [11, 110, 79],
     config.STATUS_EARLY: [59, 130, 246],
@@ -37,7 +37,7 @@ def page_setup(title: str, icon: str = "🚍") -> None:
 
 @st.cache_data(ttl=120, show_spinner=False)
 def load_all_observations() -> pd.DataFrame:
-    """Load and lightly enrich all observations. Cached for snappy filtering."""
+    """Load every observation and add a couple of helper columns. Cached."""
     df = analytics.load_observations()
     if df.empty:
         return df
@@ -48,7 +48,7 @@ def load_all_observations() -> pd.DataFrame:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_vehicles() -> pd.DataFrame:
-    """Load the most recent vehicle snapshot for the live map."""
+    """Newest vehicle snapshot for the live map."""
     latest = database.read_sql(
         "SELECT MAX(collected_at) AS c FROM vehicles")
     if latest.empty or latest["c"].iloc[0] is None:
@@ -75,7 +75,7 @@ def empty_state() -> None:
 
 
 def sidebar_filters(df: pd.DataFrame) -> pd.DataFrame:
-    """Render global filters and return the filtered DataFrame."""
+    """Draw the global filters and return the filtered frame."""
     st.sidebar.header("Filters")
     if df.empty:
         return df
@@ -119,13 +119,13 @@ def sidebar_filters(df: pd.DataFrame) -> pd.DataFrame:
 
 def confidence_note(n: int) -> None:
     if n < config.MIN_CONFIDENT_OBSERVATIONS:
-        st.info(f"Small sample ({n} observations) - interpret with caution.",
+        st.info(f"Small sample ({n} observations), read with caution.",
                 icon="⚠️")
 
 
 def fmt_minutes(value) -> str:
     if value is None or pd.isna(value):
-        return "—"
+        return "n/a"
     return f"{value:.1f} min"
 
 
