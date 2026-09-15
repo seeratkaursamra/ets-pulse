@@ -1,6 +1,5 @@
-"""ETS Pulse - Overview dashboard (Streamlit entry point).
+"""ETS Pulse overview dashboard. This is the Streamlit entry point.
 
-Run locally:
     streamlit run app.py
 """
 from __future__ import annotations
@@ -14,7 +13,7 @@ from src import analytics, ui
 ui.page_setup("Overview")
 
 st.title("🚍 ETS Pulse")
-st.caption("Edmonton Transit Delay Analytics · an independent portfolio project")
+st.caption("Edmonton Transit Delay Analytics - an independent portfolio project")
 
 if not ui.data_available():
     ui.empty_state()
@@ -23,16 +22,16 @@ if not ui.data_available():
 df_all = ui.load_all_observations()
 df = ui.sidebar_filters(df_all)
 
-# --- Summary cards ---------------------------------------------------------
+# summary cards
 m = analytics.headline_metrics(df)
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Average delay", ui.fmt_minutes(m["avg_delay_min"]),
           help="Mean delay across the filtered, matched observations.")
 c2.metric("Late observations",
-          f"{m['late_pct']:.0f}%" if m["late_pct"] is not None else "—",
+          f"{m['late_pct']:.0f}%" if m["late_pct"] is not None else "n/a",
           help="Share of matched observations more than 2 minutes late.")
 c3.metric("Most delayed route",
-          f"Route {m['worst_route']}" if m["worst_route"] else "—",
+          f"Route {m['worst_route']}" if m["worst_route"] else "n/a",
           help="Highest average delay in the current filter.")
 c4.metric("Active vehicles", f"{len(ui.load_vehicles()):,}",
           help="Vehicles in the latest realtime snapshot.")
@@ -42,7 +41,7 @@ st.caption(f"Based on {m['known_observations']:,} matched observations "
 ui.confidence_note(m["known_observations"])
 st.divider()
 
-# --- Row: delay trend by hour + live map -----------------------------------
+# delay trend by hour, next to the live map
 left, right = st.columns([1, 1])
 
 with left:
@@ -77,11 +76,11 @@ with right:
         st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view,
                                  tooltip=tooltip,
                                  map_style="road"), use_container_width=True)
-        st.caption("🟢 On time · 🔵 Early · 🟠 Slight delay · 🔴 Major delay")
+        st.caption("🟢 On time | 🔵 Early | 🟠 Slight delay | 🔴 Major delay")
 
 st.divider()
 
-# --- Row: top delayed routes + delay by hour bars --------------------------
+# worst routes and day-of-week pattern
 left2, right2 = st.columns([1, 1])
 
 with left2:
@@ -114,7 +113,6 @@ with right2:
 
 st.divider()
 
-# --- Recent delayed observations -------------------------------------------
 st.subheader("Recent delayed trips")
 recent = analytics.recent_delayed(df, limit=25)
 if recent.empty:
@@ -126,5 +124,5 @@ else:
     st.dataframe(recent, use_container_width=True, hide_index=True)
 
 cov = analytics.date_coverage()
-st.caption(f"Data coverage: {cov['first_day']} → {cov['last_day']} · "
-           f"{cov['n']:,} total observations · last collected {cov['last']}")
+st.caption(f"Data coverage: {cov['first_day']} to {cov['last_day']} | "
+           f"{cov['n']:,} total observations | last collected {cov['last']}")
