@@ -62,6 +62,74 @@ def load_vehicles() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_live_vehicles() -> pd.DataFrame:
+    """Pull vehicles straight from the ETS realtime feed right now.
+
+    Uses the delay the feed reports on each trip's next stop, so it stays light
+    (no schedule download) and works on hosts that can't run the collector.
+    Returns an empty frame if the feed can't be reached.
+    """
+    from datetime import datetime, timezone
+    from src import fetch_realtime as fr, parse_realtime as pr
+    from src.calculate_delays import classify
+
+    try:
+        updates = pr.parse_trip_updates(fr.fetch_trip_updates())
+        vehicles = pr.parse_vehicle_positions(fr.fetch_vehicle_positions())
+    except Exception:
+        return pd.DataFrame()
+
+    # delay for each trip, taken at its next upcoming stop
+    best: dict[str, tuple[int, int]] = {}
+    for r in updates:
+        tid = r.get("trip_id")
+        if not tid or r.get("feed_delay_seconds") is None:
+            continue
+        seq = r.get("stop_sequence")
+        seq = seq if seq is not None else 10**9
+        cur = best.get(tid)
+        if cur is None or seq < cur[0]:
+            best[tid] = (seq, r.get("feed_delay_seconds"))
+    trip_delay = {tid: d for tid, (_s, d) in best.items()}
+
+    rows = []
+    for v in vehicles:
+        if v.get("latitude") is None or v.get("longitude") is None:
+            continue
+        d = trip_delay.get(v.get("trip_id"))
+        rows.append({
+            "vehicle_id": v.get("vehicle_id"),
+            "trip_id": v.get("trip_id"),
+            "route_id": v.get("route_id"),
+            "latitude": v.get("latitude"),
+            "longitude": v.get("longitude"),
+            "bearing": v.get("bearing"),
+            "delay_seconds": d,
+            "status": classify(d),
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    routes = database.read_sql("SELECT route_id, route_short_name FROM routes")
+    if not routes.empty:
+        df = df.merge(routes, on="route_id", how="left")
+    if "route_short_name" not in df.columns:
+        df["route_short_name"] = df["route_id"]
+    df["route_short_name"] = df["route_short_name"].fillna(df["route_id"])
+    df["collected_at"] = datetime.now(timezone.utc).isoformat()
+    return df
+
+
+def live_vehicles() -> pd.DataFrame:
+    """Real vehicles from the feed, falling back to the stored snapshot."""
+    df = fetch_live_vehicles()
+    if df.empty:
+        return load_vehicles()
+    return df
+
+
 def data_available() -> bool:
     counts = database.table_counts()
     return counts.get("delay_observations", 0) > 0
