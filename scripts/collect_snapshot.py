@@ -1,15 +1,12 @@
-"""Collect one realtime snapshot from ETS feeds and store observations.
+"""Grab one realtime snapshot from the ETS feeds and store it.
 
-Run this on a schedule (e.g. every 5 minutes via cron) to build history:
+Run it on a schedule (cron every ~5 min) to build up history:
 
     python -m scripts.collect_snapshot
 
-Delay definition (blueprint):
-    delay_seconds = predicted_arrival - scheduled_arrival
-GTFS-Realtime provides this delay directly on each stop_time_update; when a
-predicted absolute time is present we derive the scheduled time as
-predicted - delay so we can bucket by local hour and service day.
-Missing information stays Unknown - never silently on time.
+Delay is predicted - scheduled. We get the scheduled time by matching each
+prediction against the static schedule; if that misses we fall back to any
+delay the feed reports. Anything we can't work out stays Unknown, not on time.
 """
 from __future__ import annotations
 
@@ -48,13 +45,11 @@ def _local_parts(epoch: int | None):
 
 
 def _next_stop_per_trip(updates: list[dict]) -> list[dict]:
-    """Reduce many stop_time_updates to one record per active trip: its next stop.
+    """Keep one record per active trip: its next stop.
 
-    Edmonton's feed publishes updates for every scheduled trip of the day, but a
-    genuine "observation" is an in-service vehicle's current delay. We therefore
-    keep only trips that have a vehicle assigned, and for each we take the next
-    upcoming stop (smallest stop_sequence carrying a prediction). Over repeated
-    snapshots this builds a clean, real delay history.
+    The feed lists every stop of every trip, but the observation we care about
+    is an in-service vehicle's current delay. So keep trips that have a vehicle,
+    and for each take the next stop (lowest stop_sequence with a prediction).
     """
     best: dict[str, dict] = {}
     for rec in updates:
@@ -87,16 +82,15 @@ def sync_static_reference() -> None:
 
 
 def collect_once(schedule: match_schedule.ScheduleIndex | None = None) -> int:
-    """Fetch, parse, compute delays, and store one snapshot. Returns rows added.
+    """Fetch, parse, compute delays and store one snapshot. Returns rows added.
 
-    A loaded ScheduleIndex enables proper matching (predicted - scheduled) and
-    route lookup for realtime records that omit route_id. Without it, we fall
-    back to any delay the feed reports directly.
+    Pass a loaded ScheduleIndex to get real matching and route lookup for
+    records missing route_id; without one we just use the feed's own delay.
     """
     database.initialize()
     collected_at = datetime.now(timezone.utc).isoformat()
 
-    # --- Trip updates -> delay observations --------------------------------
+    # trip updates -> delay observations
     try:
         raw_tu = fetch_realtime.fetch_trip_updates()
         updates = parse_realtime.parse_trip_updates(raw_tu)
@@ -104,10 +98,8 @@ def collect_once(schedule: match_schedule.ScheduleIndex | None = None) -> int:
         print(f"Trip updates unavailable: {exc}")
         updates = []
 
-    # A trip update predicts every downstream stop; recording all of them would
-    # massively over-count and bias stats toward the current day. We keep one
-    # observation per trip: the next upcoming stop (lowest stop_sequence that
-    # has a prediction). Over repeated snapshots this builds real history.
+    # recording every predicted stop would over-count badly, so keep just the
+    # next stop per trip
     updates = _next_stop_per_trip(updates)
 
     observations = []
@@ -116,14 +108,13 @@ def collect_once(schedule: match_schedule.ScheduleIndex | None = None) -> int:
         feed_delay = rec.get("feed_delay_seconds")
         trip_id = rec.get("trip_id")
 
-        # Resolve route: prefer the feed value, fall back to trips.txt.
+        # route: prefer the feed value, fall back to trips.txt
         route_id = rec.get("route_id")
         if not route_id and schedule is not None:
             route_id = schedule.route_for_trip(trip_id)
 
-        # Determine scheduled time and delay, in priority order:
-        #   1) match static schedule (scheduled -> delay = predicted - scheduled)
-        #   2) feed-provided delay (scheduled = predicted - delay)
+        # scheduled time + delay: try the static schedule first, then the
+        # feed's own delay value
         scheduled = None
         if schedule is not None:
             scheduled = schedule.scheduled_epoch(
@@ -161,11 +152,11 @@ def collect_once(schedule: match_schedule.ScheduleIndex | None = None) -> int:
 
     added = database.insert_observations(observations)
 
-    # Build a trip -> (delay, status) lookup so live vehicles can be colored.
+    # trip -> (delay, status) so we can color the live vehicles
     trip_delay = {o["trip_id"]: (o["delay_seconds"], o["status"])
                   for o in observations if o.get("trip_id")}
 
-    # --- Vehicle positions -> latest map layer -----------------------------
+    # vehicle positions -> latest map layer
     try:
         raw_vp = fetch_realtime.fetch_vehicle_positions()
         vehicles = parse_realtime.parse_vehicle_positions(raw_vp)

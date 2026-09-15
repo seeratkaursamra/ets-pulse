@@ -1,21 +1,15 @@
-"""Generate a realistic simulated history so the dashboard is populated day one.
+"""Seed a simulated history so the dashboard isn't empty on a fresh install.
 
-Realtime feeds only describe "now", so a brand-new install has no multi-day
-history to analyze. This script seeds the database with plausible delay
-observations built on top of the **real** Edmonton GTFS routes and stops, so the
-simulated history and the live snapshots collected by scripts/collect_snapshot.py
-share the same route IDs, stop IDs, names, and coordinates.
+The realtime feed only shows "now", so a new install has nothing to chart yet.
+This fills the database with believable delay observations built on the real
+Edmonton routes and stops, so the seeded rows and the live snapshots from
+collect_snapshot.py use the same IDs, names and coordinates.
 
-Patterns baked in:
-  * Rush-hour peaks (07-09, 15-18) have larger delays.
-  * A few routes are chronically worse (routes 8/4/9, matching the blueprint).
-  * Weekdays are worse than weekends.
-  * A share of observations are Unknown (no realtime match) - never on-time.
+What's baked in: rush-hour peaks (07-09, 15-18), a few chronically bad routes
+(8/4/9), worse weekdays than weekends, and a chunk of Unknown rows (no match,
+never on time). If the static GTFS won't download, a small built-in fallback
+set is used so it still runs offline.
 
-If the real static GTFS cannot be downloaded, a small built-in fallback set of
-routes/stops is used instead so the script always works offline.
-
-Usage:
     python -m scripts.generate_backfill --days 14
 """
 from __future__ import annotations
@@ -37,11 +31,11 @@ from src.calculate_delays import classify  # noqa: E402
 LOCAL = ZoneInfo(config.LOCAL_TZ)
 random.seed(42)
 
-# Chronic-delay narrative: these route short names are the worst offenders.
+# the routes we treat as the worst offenders, keyed by short name
 CHRONIC = {"8": 1.9, "008": 1.9, "4": 1.7, "004": 1.7, "9": 1.6, "009": 1.6,
            "15": 1.4, "015": 1.4, "120": 1.4, "2": 1.15, "002": 1.15}
 
-# --- Built-in fallback (used only if the real static feed is unavailable) ---
+# fallback set, only used if the real static feed won't download
 FALLBACK_ROUTES = [
     ("008", "8", "Abbottsfield - Mill Woods", 1.9),
     ("004", "4", "Lewis Farms - Capilano", 1.7),
@@ -69,11 +63,11 @@ FALLBACK_STOPS = [
 
 
 def _route_factor(short_name: str) -> float:
-    """Chronic delay multiplier for a route (deterministic)."""
+    """Delay multiplier for a route, stable across runs."""
     s = str(short_name).strip()
     if s in CHRONIC:
         return CHRONIC[s]
-    # Stable pseudo-random factor in ~0.7..1.4 based on the name.
+    # derive a steady factor (~0.7..1.4) from the name
     h = sum(ord(c) for c in s)
     return round(0.7 + (h % 70) / 100, 2)
 
@@ -95,13 +89,13 @@ def _dow_factor(dow: int) -> float:
 
 
 def _sample_delay_seconds(route_factor: float, hour: int, dow: int) -> int | None:
-    if random.random() < 0.08:  # ~8% cannot be matched -> Unknown
+    if random.random() < 0.08:  # ~8% don't match, leave them Unknown
         return None
     base = 45 * route_factor * _hour_factor(hour) * _dow_factor(dow)
     delay = base + random.gauss(0, 55)
-    if random.random() < 0.05:                       # major disruption spike
+    if random.random() < 0.05:                       # big disruption now and then
         delay += random.uniform(240, 700)
-    if random.random() < 0.06:                       # occasional early bus
+    if random.random() < 0.06:                       # sometimes a bus runs early
         delay -= random.uniform(70, 180)
     return int(delay)
 
@@ -113,11 +107,11 @@ def _weighted_hour() -> int:
 
 
 def load_reference(max_routes: int, max_stops: int):
-    """Return (sim_routes, sim_stops) as lists of tuples, using real GTFS when
-    possible. Also upserts the full reference tables into the database.
+    """Pick the routes/stops to simulate, using real GTFS if we can get it.
 
-    sim_routes: [(route_id, short_name, factor), ...]
-    sim_stops:  [(stop_id, name, lat, lon), ...]
+    Also writes the full reference tables to the database. Returns
+    (sim_routes, sim_stops) where sim_routes is [(route_id, short_name, factor)]
+    and sim_stops is [(stop_id, name, lat, lon)].
     """
     routes_df = pd.DataFrame()
     stops_df = pd.DataFrame()
@@ -130,14 +124,13 @@ def load_reference(max_routes: int, max_stops: int):
 
     if not routes_df.empty and not stops_df.empty:
         database.upsert_routes(routes_df.to_dict("records"))
-        # Deduplicate stops that share names/positions; keep those with coords.
+        # only keep stops that actually have coordinates
         stops_df = stops_df.dropna(subset=["latitude", "longitude"])
         database.upsert_stops(stops_df.to_dict("records"))
         print(f"Loaded real GTFS reference: {len(routes_df)} routes, "
               f"{len(stops_df)} stops")
 
-        # Pick simulation routes: always include the chronic narrative routes,
-        # then fill with a spread of other routes.
+        # always include the chronic routes, then fill with a spread of others
         routes_df = routes_df.dropna(subset=["route_short_name"])
         chronic_rows = routes_df[routes_df["route_short_name"].isin(CHRONIC.keys())]
         others = routes_df[~routes_df["route_short_name"].isin(CHRONIC.keys())]
@@ -152,7 +145,7 @@ def load_reference(max_routes: int, max_stops: int):
                      for s in stops_sample.itertuples()]
         return sim_routes, sim_stops
 
-    # Fallback path
+    # fallback path
     database.upsert_routes([
         {"route_id": rid, "route_short_name": short,
          "route_long_name": long, "route_type": 3}
