@@ -18,6 +18,8 @@ A data pipeline and interactive dashboard that turns live Edmonton Transit GTFS 
 
 ---
 
+**Live demo: [ets-pulse.streamlit.app](https://ets-pulse.streamlit.app)**
+
 ![Overview dashboard](assets/screenshot_overview.png)
 
 ## What it does
@@ -80,6 +82,10 @@ by collecting snapshots over time and turning that into an analyzable time serie
            (aggregations, score)   (cards, charts, maps)
 ```
 
+On the deployed app a scheduled GitHub Action reruns this pipeline every 20 minutes and
+stores the growing database on the `data` branch, which the app downloads at runtime, so the
+history keeps building with nothing running locally.
+
 ## Tech stack
 
 | Layer | Tools |
@@ -91,6 +97,7 @@ by collecting snapshots over time and turning that into an analyzable time serie
 | Dashboard | Streamlit |
 | Charts and maps | Plotly, PyDeck |
 | Testing | pytest |
+| Automation | GitHub Actions (scheduled data collector) |
 | Deployment | Streamlit Community Cloud (free) |
 
 ## Delay methodology
@@ -130,11 +137,13 @@ Yes. ETS Pulse reads directly from the official City of Edmonton feeds:
 
 A single live collection matches roughly 300 in-service vehicles to 174 routes and 6,570 stops.
 
-Since a realtime feed only exposes the present, the multi-day history shown by default is a
-realistic simulated backfill built on top of the real route and stop network, so the dashboard
-has something to show right away. Running `scripts/collect_snapshot.py` on a schedule builds
-up genuine history that blends in seamlessly (same schema, same IDs, same methodology). This
-is spelled out in the in-app Methodology page.
+The live map and current delay numbers are pulled straight from the realtime feed on every
+visit, so those are always real. For history, a GitHub Actions workflow
+(`.github/workflows/collect.yml`) collects a real snapshot every 20 minutes and publishes the
+growing database to the `data` branch; the deployed app downloads it at runtime, so the
+historical charts fill with genuine data over time. Until enough real history has piled up, a
+realistic simulated backfill (built on the real route and stop network) stands in so the
+dashboard is never empty. This is spelled out in the in-app Methodology page.
 
 ## Quickstart
 
@@ -158,10 +167,17 @@ Open the URL Streamlit prints (default http://localhost:8501).
 > macOS note: launch with `./run.sh` (or an activated virtualenv). It sets
 > `ARROW_DEFAULT_MEMORY_POOL=system` to avoid a pyarrow/mimalloc segfault on macOS + Python 3.13.
 
-### Build real history
+### Deployment and real history
+
+The app runs on Streamlit Community Cloud. A GitHub Actions workflow
+(`.github/workflows/collect.yml`) runs `collect_snapshot` every 20 minutes, appends the
+result to a SQLite database on the `data` branch, and the app downloads that database at
+runtime, so history accumulates on its own with nothing running locally.
+
+To collect locally instead, run it on a cron:
 
 ```bash
-# collect a live snapshot every 5 minutes (cron)
+# collect a live snapshot every 5 minutes
 */5 * * * * cd /path/to/ets-pulse && ./.venv/bin/python -m scripts.collect_snapshot
 ```
 
@@ -172,13 +188,14 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Covers delay calculation, GTFS times past midnight, status thresholds, missing values staying 
+Covers delay calculation, GTFS times past midnight, status thresholds, missing values staying
 Unknown, realtime protobuf parsing, and reliability-score bounds.
 
 ## Project structure
 
 ```
 ets-pulse/
+├── .github/workflows/     # collect.yml, the scheduled real-data collector
 ├── app.py                 # overview dashboard (entry point)
 ├── run.sh                 # crash-safe launcher
 ├── pages/                 # Live Map, Route, Stop, Historical, Methodology
