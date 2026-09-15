@@ -35,8 +35,8 @@ c2.metric("Late observations",
 c3.metric("Most delayed route",
           f"Route {m['worst_route']}" if m["worst_route"] else "n/a",
           help="Highest average delay in the current filter.")
-c4.metric("Active vehicles", f"{len(ui.load_vehicles()):,}",
-          help="Vehicles in the latest realtime snapshot.")
+c4.metric("Active vehicles", f"{len(ui.live_vehicles()):,}",
+          help="Buses currently reporting on the live ETS feed.")
 
 st.caption(f"Based on {m['known_observations']:,} matched observations "
            f"({m['unknown_observations']:,} unknown / unmatched).")
@@ -61,7 +61,7 @@ with left:
 
 with right:
     st.subheader("Live vehicles")
-    veh = ui.load_vehicles()
+    veh = ui.live_vehicles()
     if veh.empty:
         st.info("No vehicle snapshot yet. Run a collection to populate the map.")
     else:
