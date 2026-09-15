@@ -61,7 +61,9 @@ def _next_stop_per_trip(updates: list[dict]) -> list[dict]:
         seq = rec.get("stop_sequence")
         seq_val = seq if seq is not None else 10**9
         cur = best.get(trip_id)
-        if cur is None or seq_val < (cur.get("stop_sequence") or 10**9):
+        cur_seq = cur.get("stop_sequence") if cur is not None else None
+        cur_val = cur_seq if cur_seq is not None else 10**9
+        if cur is None or seq_val < cur_val:
             best[trip_id] = rec
     return list(best.values())
 
