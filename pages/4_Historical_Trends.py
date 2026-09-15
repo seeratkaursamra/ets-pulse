@@ -1,4 +1,4 @@
-"""Historical trends: weekday/weekend, hour x day heatmap, variability."""
+"""Historical trends: weekday vs weekend, hour-by-day heatmap, variability."""
 from __future__ import annotations
 
 import numpy as np
@@ -25,7 +25,7 @@ if known.empty:
 
 known["delay_min"] = known["delay_seconds"] / 60
 
-# --- Weekday vs weekend ----------------------------------------------------
+# weekday vs weekend
 st.subheader("Weekday vs weekend")
 known["is_weekend"] = known["day_of_week"] >= 5
 cmp = (known.groupby("is_weekend")["delay_min"].mean().round(1)
@@ -43,8 +43,8 @@ with c2:
 
 st.divider()
 
-# --- Hour x day-of-week heatmap -------------------------------------------
-st.subheader("Delay heatmap: hour × day of week")
+# hour-by-day-of-week heatmap
+st.subheader("Delay heatmap: hour by day of week")
 pivot = (known.groupby(["day_of_week", "local_hour"])["delay_min"]
          .mean().reset_index())
 if not pivot.empty:
@@ -58,7 +58,7 @@ if not pivot.empty:
 
 st.divider()
 
-# --- Routes with greatest variability -------------------------------------
+# routes with the most variable service
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("Most variable routes")
@@ -91,7 +91,7 @@ with col2:
 
 st.divider()
 
-# --- Major-delay frequency over time --------------------------------------
+# how often major delays happen over time
 st.subheader("Major-delay frequency by service date")
 known["is_major"] = known["delay_seconds"] > config.SLIGHT_DELAY_MAX
 freq = (known.groupby("service_date")["is_major"].mean().mul(100).round(1)
