@@ -23,9 +23,9 @@ st.markdown("""
 | **GTFS-Realtime Vehicle Positions** | Live latitude, longitude, bearing, vehicle & trip IDs |
 | **GTFS-Realtime Alerts** | Service disruptions and public notices |
 
-Realtime feeds describe what is happening *now*. ETS Pulse collects a snapshot
-approximately every five minutes and stores each observation to build its own
-history.
+Realtime feeds describe what is happening right now. ETS Pulse collects a
+snapshot roughly every five minutes and stores each observation to build its
+own history.
 """)
 
 st.subheader("Delay definition")
@@ -42,21 +42,21 @@ st.markdown(f"""
 | Major delay | &gt; +{config.SLIGHT_DELAY_MAX} s |
 | Unknown | Realtime record missing or unmatched |
 
-A missing realtime update is **never** treated as on time. It is marked
-*Unknown* so route performance is not falsely improved.
+A missing realtime update is never treated as on time. It is marked Unknown so
+route performance is not falsely improved.
 """)
 
 st.subheader("Reliability score")
 st.markdown("""
 Each matched observation is weighted by status (On time = 1.0, Early = 0.8,
 Slight delay = 0.4, Major delay = 0.0; Unknown excluded). The route score is
-100 × the mean weight, giving an interpretable 0–100 reliability index.
+100 times the mean weight, giving a 0-100 reliability index.
 """)
 
 st.subheader("Data-quality rules")
 st.markdown("""
 - Timestamps stored in a consistent timezone (UTC) and format (ISO 8601).
-- GTFS times past midnight (hours ≥ 24) are handled on the correct service day.
+- GTFS times past midnight (hours >= 24) are handled on the correct service day.
 - The same vehicle/trip/stop is not counted twice within one snapshot.
 - Observation counts are shown beside every average.
 - Small samples are flagged with a confidence warning.
@@ -71,7 +71,7 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Observations", f"{counts['delay_observations']:,}")
 c2.metric("Routes", f"{counts['routes']:,}")
 c3.metric("Stops", f"{counts['stops']:,}")
-st.caption(f"Coverage: {cov['first_day']} → {cov['last_day']} · "
+st.caption(f"Coverage: {cov['first_day']} to {cov['last_day']} | "
            f"last collected {cov['last']}")
 
 st.subheader("Known limitations")
