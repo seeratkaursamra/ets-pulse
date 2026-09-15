@@ -1,14 +1,10 @@
-"""Delay calculation and GTFS time helpers.
+"""Delay math and GTFS time helpers.
 
-The delay definition is intentionally simple and reproducible:
+delay_seconds = predicted_arrival - scheduled_arrival
 
-    delay_seconds = predicted_arrival_timestamp - scheduled_arrival_timestamp
-
-The tricky parts are:
-  * GTFS schedule times can exceed 24:00:00 (a trip that starts before midnight
-    and continues into the next service day). "25:10:00" means 1:10 AM on the
-    day after the service date.
-  * A missing prediction must stay Unknown, never silently become 0/on-time.
+Watch out for two things: GTFS times can go past 24:00:00 (a trip that runs
+past midnight, so "25:10:00" means 1:10 AM the next day), and a missing
+prediction has to stay Unknown instead of quietly becoming zero.
 """
 from __future__ import annotations
 
@@ -19,8 +15,7 @@ from . import config
 
 
 def parse_gtfs_time_to_seconds(gtfs_time: str) -> int:
-    """Convert a GTFS "HH:MM:SS" time (possibly > 24h) into seconds after
-    midnight of the service day.
+    """GTFS "HH:MM:SS" (can be > 24h) to seconds after midnight.
 
     >>> parse_gtfs_time_to_seconds("08:30:00")
     30600
@@ -35,10 +30,7 @@ def parse_gtfs_time_to_seconds(gtfs_time: str) -> int:
 
 
 def scheduled_timestamp(service_date: datetime, gtfs_time: str) -> datetime:
-    """Combine a service date (midnight) with a GTFS time that may exceed 24h.
-
-    service_date should be the midnight datetime of the service day.
-    """
+    """Add a GTFS time (possibly past 24h) onto a service day's midnight."""
     base = service_date.replace(hour=0, minute=0, second=0, microsecond=0)
     return base + timedelta(seconds=parse_gtfs_time_to_seconds(gtfs_time))
 
@@ -47,10 +39,9 @@ def compute_delay_seconds(
     scheduled: Optional[datetime | int | float],
     predicted: Optional[datetime | int | float],
 ) -> Optional[int]:
-    """Return delay in seconds (predicted - scheduled), or None if unknown.
+    """predicted - scheduled, in seconds. None if either side is missing.
 
-    Accepts either datetimes or POSIX epoch seconds for each argument, as long
-    as both are the same kind. Returns None when either side is missing.
+    Both args can be datetimes or epoch seconds, as long as they match.
     """
     if scheduled is None or predicted is None:
         return None
@@ -65,12 +56,11 @@ def compute_delay_seconds(
 
 
 def delay_minutes(delay_seconds: Optional[int]) -> Optional[float]:
-    """Human-facing minutes, rounded to one decimal. None stays None."""
+    """Seconds to minutes for display. None stays None."""
     if delay_seconds is None:
         return None
     return round(delay_seconds / 60.0, 1)
 
 
 def classify(delay_seconds: Optional[int]) -> str:
-    """Convenience re-export so callers can import everything from one module."""
     return config.classify_delay(delay_seconds)
