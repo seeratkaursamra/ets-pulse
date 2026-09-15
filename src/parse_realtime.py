@@ -1,8 +1,8 @@
-"""Parse GTFS-Realtime protobuf messages into plain Python dicts.
+"""Turn GTFS-Realtime protobuf messages into plain dicts.
 
-Uses the official google gtfs-realtime-bindings. Each parser is defensive: real
-feeds routinely have missing fields, so we read what exists and leave the rest
-as None (never guessing a value that would improve delay stats).
+Uses the official google gtfs-realtime-bindings. Real feeds drop fields all the
+time, so each parser only reads what's there and leaves the rest as None rather
+than guessing a value that would flatter the delay numbers.
 """
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ def _feed(raw: bytes) -> gtfs_realtime_pb2.FeedMessage:
 
 
 def parse_trip_updates(raw: bytes) -> List[dict]:
-    """Flatten TripUpdate entities into one dict per stop_time_update.
+    """One dict per stop_time_update.
 
-    Each record carries scheduled vs predicted (arrival) epoch seconds when the
-    feed provides them, plus the feed-reported delay if present.
+    Carries the predicted arrival epoch when present, plus the feed's own delay
+    value if it gave one.
     """
     feed = _feed(raw)
     records: List[dict] = []
@@ -37,7 +37,7 @@ def parse_trip_updates(raw: bytes) -> List[dict]:
             event = arrival or departure
 
             predicted_time = event.time if event and event.time else None
-            # GTFS-RT may give an explicit delay even without absolute times.
+            # some feeds send an explicit delay even without absolute times
             feed_delay = None
             if event is not None and event.HasField("delay"):
                 feed_delay = event.delay
@@ -56,7 +56,7 @@ def parse_trip_updates(raw: bytes) -> List[dict]:
 
 
 def parse_vehicle_positions(raw: bytes) -> List[dict]:
-    """One dict per vehicle with position and trip linkage."""
+    """One dict per vehicle, with position and trip link."""
     feed = _feed(raw)
     records: List[dict] = []
     for entity in feed.entity:
@@ -77,7 +77,7 @@ def parse_vehicle_positions(raw: bytes) -> List[dict]:
 
 
 def parse_alerts(raw: bytes) -> List[dict]:
-    """One dict per (alert, affected route/stop) pair."""
+    """One dict per alert / affected route or stop."""
     feed = _feed(raw)
     records: List[dict] = []
     for entity in feed.entity:
