@@ -50,8 +50,8 @@ with tab_live:
         c2.markdown("🔵 **Early**")
         c3.markdown("🟠 **Slight delay**")
         c4.markdown("🔴 **Major delay**")
-        st.caption(f"{len(shown):,} vehicles shown · last snapshot "
-                   f"{veh['collected_at'].iloc[0] if not veh.empty else '—'}")
+        st.caption(f"{len(shown):,} vehicles shown | last snapshot "
+                   f"{veh['collected_at'].iloc[0] if not veh.empty else 'n/a'}")
 
 with tab_heat:
     st.subheader("Average delay by stop")
