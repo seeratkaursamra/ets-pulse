@@ -1,7 +1,7 @@
-"""Fetch GTFS-Realtime protobuf feeds from Edmonton Transit Service.
+"""Fetch the GTFS-Realtime protobuf feeds from ETS.
 
-Returns the raw feed bytes. Parsing lives in parse_realtime.py so this module
-stays a thin, easily-mocked network boundary.
+Just returns the raw bytes. Parsing lives in parse_realtime so this stays a thin
+network boundary that's easy to mock in tests.
 """
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from . import config
 
 
 class FeedUnavailable(RuntimeError):
-    """Raised when a realtime feed cannot be fetched."""
+    """Raised when a realtime feed can't be fetched."""
 
 
 def _get(url: str, timeout: int = 30) -> bytes:
     try:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
-    except requests.RequestException as exc:  # network, DNS, HTTP errors
+    except requests.RequestException as exc:
         raise FeedUnavailable(f"Could not fetch {url}: {exc}") from exc
     return resp.content
 
