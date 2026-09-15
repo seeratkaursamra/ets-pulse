@@ -1,11 +1,8 @@
-"""SQLite storage layer for ETS Pulse.
+"""SQLite storage.
 
-Schema mirrors the blueprint:
-  * delay_observations - one row per matched trip/stop observation per snapshot
-  * routes, stops, vehicles, alerts - reference/latest-state tables
-
-We use the standard-library sqlite3 driver for writes (simple, no server) and
-expose helpers that return pandas DataFrames for the analytics/dashboard layer.
+delay_observations holds one row per matched trip/stop per snapshot; routes,
+stops, vehicles and alerts are reference/latest-state tables. Writes go through
+the stdlib sqlite3 driver and reads come back as pandas DataFrames.
 """
 from __future__ import annotations
 
@@ -44,13 +41,13 @@ CREATE TABLE IF NOT EXISTS delay_observations (
     stop_sequence  INTEGER,
     scheduled_time TEXT,                   -- ISO8601 UTC
     predicted_time TEXT,                   -- ISO8601 UTC
-    delay_seconds  INTEGER,                -- NULL => unknown
+    delay_seconds  INTEGER,                -- NULL means unknown
     status         TEXT,
     local_hour     INTEGER,                -- 0-23 local time of scheduled arrival
     day_of_week    INTEGER,                -- 0=Mon .. 6=Sun
     latitude       REAL,
     longitude      REAL,
-    -- Guard against double-counting the same trip/stop within one snapshot.
+    -- stops one trip/stop being counted twice in the same snapshot
     UNIQUE(collected_at, trip_id, stop_id, stop_sequence)
 );
 
@@ -91,7 +88,6 @@ def _ensure_parent(path: Path) -> None:
 
 @contextmanager
 def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
-    """Context-managed SQLite connection with sane defaults."""
     path = Path(db_path or config.DB_PATH)
     _ensure_parent(path)
     conn = sqlite3.connect(path)
@@ -106,7 +102,7 @@ def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
 
 
 def initialize(db_path: Path | None = None) -> None:
-    """Create all tables and indexes if they do not exist."""
+    """Create the tables and indexes if they aren't there yet."""
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
 
@@ -146,7 +142,7 @@ def upsert_stops(rows: Iterable[dict], db_path: Path | None = None) -> int:
 
 
 def insert_observations(rows: Iterable[dict], db_path: Path | None = None) -> int:
-    """Insert delay observations, ignoring duplicates within a snapshot."""
+    """Insert observations, skipping duplicates inside a snapshot."""
     rows = list(rows)
     if not rows:
         return 0
@@ -167,7 +163,7 @@ def insert_observations(rows: Iterable[dict], db_path: Path | None = None) -> in
 
 
 def replace_vehicles(rows: Iterable[dict], db_path: Path | None = None) -> int:
-    """Store the latest vehicle snapshot (append; dashboard reads most recent)."""
+    """Append a vehicle snapshot; the dashboard just reads the newest one."""
     rows = list(rows)
     if not rows:
         return 0
@@ -186,7 +182,6 @@ def replace_vehicles(rows: Iterable[dict], db_path: Path | None = None) -> int:
 
 def read_sql(query: str, params: tuple | dict | None = None,
              db_path: Path | None = None) -> pd.DataFrame:
-    """Run a read query and return a DataFrame."""
     path = Path(db_path or config.DB_PATH)
     if not path.exists():
         return pd.DataFrame()
@@ -195,7 +190,7 @@ def read_sql(query: str, params: tuple | dict | None = None,
 
 
 def table_counts(db_path: Path | None = None) -> dict:
-    """Quick row counts for the main tables (used in the methodology page)."""
+    """Row counts for the main tables."""
     out = {}
     for tbl in ("delay_observations", "routes", "stops", "vehicles", "alerts"):
         try:
