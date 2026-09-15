@@ -199,7 +199,7 @@ def sidebar_filters(df: pd.DataFrame) -> pd.DataFrame:
     out = out[(out["local_hour"] >= hour_range[0]) &
               (out["local_hour"] <= hour_range[1])]
     if date_range and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-        sd = pd.to_datetime(df["service_date"], errors="coerce")
+        sd = pd.to_datetime(out["service_date"], errors="coerce")
         start, end = pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1])
         out = out[(sd >= start) & (sd <= end)]
 
