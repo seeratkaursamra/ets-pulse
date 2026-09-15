@@ -1,8 +1,8 @@
-"""Aggregation and scoring on top of the delay_observations table.
+"""Aggregations and the reliability score over delay_observations.
 
-Every function returns a pandas DataFrame (or scalar dict) ready for the
-dashboard. Unknown observations are counted separately and never treated as
-on-time. Averages are always paired with an observation count.
+Everything returns a DataFrame (or dict) the dashboard can drop straight in.
+Unknown rows are counted on their own and never mixed into "on time", and every
+average comes back with its observation count.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pandas as pd
 
 from . import config, database
 
-# Status weights for the reliability score (0..1). Unknown is excluded.
+# weights for the reliability score, 0..1 (Unknown is left out)
 _STATUS_WEIGHTS = {
     config.STATUS_ON_TIME: 1.0,
     config.STATUS_EARLY: 0.8,
@@ -20,7 +20,7 @@ _STATUS_WEIGHTS = {
 
 
 def _where(filters: dict | None) -> tuple[str, dict]:
-    """Build a WHERE clause from optional filters shared by most queries."""
+    """Build the shared WHERE clause from the optional filter dict."""
     filters = filters or {}
     clauses: list[str] = []
     params: dict = {}
@@ -50,7 +50,7 @@ def _where(filters: dict | None) -> tuple[str, dict]:
 
 
 def load_observations(filters: dict | None = None) -> pd.DataFrame:
-    """Load observations joined with route/stop names, applying filters."""
+    """Observations joined to route and stop names, with filters applied."""
     where, params = _where(filters)
     query = f"""
         SELECT o.*, r.route_short_name, r.route_long_name,
@@ -65,7 +65,7 @@ def load_observations(filters: dict | None = None) -> pd.DataFrame:
 
 
 def headline_metrics(df: pd.DataFrame) -> dict:
-    """Summary cards: avg delay, late %, worst route, active vehicles."""
+    """Numbers for the four summary cards."""
     known = df[df["delay_seconds"].notna()] if not df.empty else df
     total_known = len(known)
     avg_delay_min = round(known["delay_seconds"].mean() / 60, 1) if total_known else None
@@ -77,7 +77,7 @@ def headline_metrics(df: pd.DataFrame) -> dict:
         grp = known.groupby("route_short_name")["delay_seconds"]
         by_route = grp.mean().dropna()
         counts = grp.size()
-        # Prefer routes with a meaningful sample; fall back to all if none qualify.
+        # only rank routes that have enough data; fall back if none do
         confident = by_route[counts >= config.MIN_CONFIDENT_OBSERVATIONS]
         pick_from = confident if not confident.empty else by_route
         if not pick_from.empty:
@@ -95,10 +95,10 @@ def headline_metrics(df: pd.DataFrame) -> dict:
 
 def delay_by_route(df: pd.DataFrame, top_n: int | None = None,
                    min_observations: int = 0) -> pd.DataFrame:
-    """Per-route average/median delay, late %, major %, and observation count.
+    """Per-route stats: avg/median delay, late %, major %, count, reliability.
 
-    min_observations drops routes with too few matched observations so rankings
-    aren't dominated by tiny samples.
+    min_observations skips routes with too little data so a handful of records
+    can't top the ranking.
     """
     if df.empty:
         return pd.DataFrame()
@@ -133,7 +133,7 @@ def delay_by_route(df: pd.DataFrame, top_n: int | None = None,
 
 
 def delay_by_hour(df: pd.DataFrame) -> pd.DataFrame:
-    """Average delay and observation count per local hour (0-23)."""
+    """Average delay and count for each local hour (0-23)."""
     if df.empty:
         return pd.DataFrame()
     known = df[df["delay_seconds"].notna()]
@@ -184,7 +184,7 @@ def worst_stops(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
 
 
 def recent_delayed(df: pd.DataFrame, limit: int = 25) -> pd.DataFrame:
-    """Most recent observations above the lateness threshold."""
+    """Latest observations that came in late."""
     if df.empty:
         return pd.DataFrame()
     late = df[(df["delay_seconds"].notna()) &
@@ -205,9 +205,9 @@ def status_breakdown(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def reliability_score(df: pd.DataFrame) -> float:
-    """0-100 reliability score from status weights (Unknown excluded).
+    """0-100 score from the status weights (Unknown ignored).
 
-    100 = every known observation on time; 0 = every one a major delay.
+    100 means everything was on time, 0 means every trip was a major delay.
     """
     if df.empty:
         return 0.0
@@ -220,7 +220,7 @@ def reliability_score(df: pd.DataFrame) -> float:
 
 
 def date_coverage() -> dict:
-    """First/last collection timestamps and service-day span."""
+    """First and last collection time plus the service-day span."""
     df = database.read_sql(
         "SELECT MIN(collected_at) AS first, MAX(collected_at) AS last, "
         "MIN(service_date) AS first_day, MAX(service_date) AS last_day, "
