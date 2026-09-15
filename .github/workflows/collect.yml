@@ -1,0 +1,52 @@
+name: collect snapshot
+
+# pulls a live ETS snapshot on a schedule and stores the growing database on the
+# data branch, so the deployed app can build up real history over time.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"   # every 20 minutes
+  workflow_dispatch: {}
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install dependencies
+        run: pip install -r requirements.txt
+
+      - name: bring forward the existing database
+        run: |
+          git fetch origin data || true
+          if git rev-parse --verify origin/data >/dev/null 2>&1; then
+            git checkout origin/data -- data/ets_delays.db || true
+          fi
+
+      - name: collect a snapshot
+        run: python -m scripts.collect_snapshot
+
+      - name: publish the database to the data branch
+        run: |
+          git config user.name "seeratkaursamra"
+          git config user.email "seeratpr@ualberta.ca"
+          git checkout -B data
+          git add -f data/ets_delays.db
+          git commit -m "collected snapshot $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "nothing new"
+          git push -f origin data
