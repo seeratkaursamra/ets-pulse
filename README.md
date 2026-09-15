@@ -172,7 +172,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Covers delay calculation, GTFS times past midnight, status thresholds, missing values staying
+Covers delay calculation, GTFS times past midnight, status thresholds, missing values staying 
 Unknown, realtime protobuf parsing, and reliability-score bounds.
 
 ## Project structure
