@@ -15,15 +15,25 @@ if not ui.data_available():
     ui.empty_state()
     st.stop()
 
-veh = ui.load_vehicles()
+veh = ui.live_vehicles()
 
 tab_live, tab_heat = st.tabs(["Live vehicles", "Delay heatmap"])
 
 with tab_live:
     if veh.empty:
-        st.info("No vehicle snapshot yet. Run `python -m scripts.collect_snapshot`.")
+        st.info("Live feed unreachable right now. Try again in a moment.")
     else:
         veh = veh.dropna(subset=["latitude", "longitude"]).copy()
+
+        # real, right-now numbers straight from the feed
+        known = veh[veh["delay_seconds"].notna()]
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Buses tracked", f"{len(veh):,}")
+        if not known.empty:
+            m2.metric("Avg delay now", f"{known['delay_seconds'].mean() / 60:.1f} min")
+            late = (known["delay_seconds"] > 120).mean() * 100
+            m3.metric("Running late", f"{late:.0f}%")
+        st.caption("Pulled live from the Edmonton Transit realtime feed.")
         route_opts = sorted(veh["route_short_name"].dropna().unique(),
                             key=lambda x: (len(str(x)), str(x)))
         chosen = st.multiselect("Filter by route", route_opts, default=[])
@@ -50,8 +60,7 @@ with tab_live:
         c2.markdown("🔵 **Early**")
         c3.markdown("🟠 **Slight delay**")
         c4.markdown("🔴 **Major delay**")
-        st.caption(f"{len(shown):,} vehicles shown | last snapshot "
-                   f"{veh['collected_at'].iloc[0] if not veh.empty else 'n/a'}")
+        st.caption(f"{len(shown):,} buses shown, fetched live from the ETS feed")
 
 with tab_heat:
     st.subheader("Average delay by stop")
