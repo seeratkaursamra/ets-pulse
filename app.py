@@ -15,6 +15,8 @@ ui.page_setup("Overview")
 st.title("🚍 ETS Pulse")
 st.caption("Edmonton Transit Delay Analytics - an independent portfolio project")
 
+ui.ensure_data()
+
 if not ui.data_available():
     ui.empty_state()
     st.stop()

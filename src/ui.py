@@ -74,6 +74,30 @@ def empty_state() -> None:
         "snapshots with `python -m scripts.collect_snapshot`.")
 
 
+def ensure_data(days: int = 14) -> None:
+    """Seed a demo history the first time the app runs.
+
+    On a fresh deploy the database is empty (it isn't checked into git), so
+    build a backfill once off the real route/stop network. Falls back to the
+    built-in set if the static feed can't be reached.
+    """
+    if data_available():
+        return
+    database.initialize()
+    with st.spinner("First run: building a demo history, give it a few seconds..."):
+        try:
+            from scripts import generate_backfill as gb
+            sim_routes, sim_stops = gb.load_reference(25, 60)
+            gb.generate_observations(sim_routes, sim_stops, days)
+            gb.generate_current_vehicles(sim_routes, sim_stops)
+        except Exception as exc:
+            st.error(f"Could not seed demo data: {exc}")
+            return
+    # drop the cached (empty) loads so the fresh data shows up
+    load_all_observations.clear()
+    load_vehicles.clear()
+
+
 def sidebar_filters(df: pd.DataFrame) -> pd.DataFrame:
     """Draw the global filters and return the filtered frame."""
     st.sidebar.header("Filters")
