@@ -191,6 +191,7 @@ def collect_once(schedule: match_schedule.ScheduleIndex | None = None) -> int:
 
 
 def main() -> None:
+    database.initialize()
     sync_static_reference()
     print("Loading static schedule for matching (this can take a few seconds)...")
     schedule = None
