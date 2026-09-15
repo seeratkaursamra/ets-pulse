@@ -85,9 +85,9 @@ class ScheduleIndex:
 
         try:
             base = datetime.strptime(start_date, "%Y%m%d")
+            secs = parse_gtfs_time_to_seconds(arrival)
         except ValueError:
             return None
         base_local = base.replace(tzinfo=LOCAL)
-        secs = parse_gtfs_time_to_seconds(arrival)
         scheduled_local = base_local + timedelta(seconds=secs)
         return int(scheduled_local.astimezone(timezone.utc).timestamp())
