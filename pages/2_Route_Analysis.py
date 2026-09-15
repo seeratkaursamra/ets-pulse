@@ -33,8 +33,8 @@ score = analytics.reliability_score(df)
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Avg delay", ui.fmt_minutes(avg))
 c2.metric("Median delay", ui.fmt_minutes(med))
-c3.metric("Late %", f"{late_pct:.0f}%" if late_pct is not None else "—")
-c4.metric("Major delay %", f"{major_pct:.0f}%" if major_pct is not None else "—")
+c3.metric("Late %", f"{late_pct:.0f}%" if late_pct is not None else "n/a")
+c4.metric("Major delay %", f"{major_pct:.0f}%" if major_pct is not None else "n/a")
 c5.metric("Reliability", f"{score:.0f}/100", ui.reliability_label(score))
 
 st.caption(f"Based on {n:,} matched observations.")
@@ -57,7 +57,7 @@ with col1:
         best = by_hour.loc[by_hour["avg_delay_min"].idxmin()]
         worst = by_hour.loc[by_hour["avg_delay_min"].idxmax()]
         st.caption(f"Best time: **{int(best['local_hour']):02d}:00** "
-                   f"({best['avg_delay_min']} min) · "
+                   f"({best['avg_delay_min']} min) | "
                    f"Worst time: **{int(worst['local_hour']):02d}:00** "
                    f"({worst['avg_delay_min']} min)")
 

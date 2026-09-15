@@ -33,7 +33,7 @@ late_pct = round(100 * (known["delay_seconds"] > 120).mean(), 1) if n else None
 
 c1, c2, c3 = st.columns(3)
 c1.metric("Average delay", ui.fmt_minutes(avg))
-c2.metric("Late %", f"{late_pct:.0f}%" if late_pct is not None else "—")
+c2.metric("Late %", f"{late_pct:.0f}%" if late_pct is not None else "n/a")
 c3.metric("Observations", f"{n:,}")
 
 st.divider()
