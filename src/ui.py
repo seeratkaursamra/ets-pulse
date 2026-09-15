@@ -4,10 +4,18 @@ Pages import from here so filtering, caching and the look stay consistent.
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import streamlit as st
 
 from . import analytics, config, database
+
+# where the scheduled collector publishes the accumulated real database
+DATA_DB_URL = os.getenv(
+    "ETS_DATA_DB_URL",
+    "https://raw.githubusercontent.com/seeratkaursamra/ets-pulse/data/data/ets_delays.db",
+)
 
 # status colors used across the charts and maps
 STATUS_COLORS = {
@@ -33,6 +41,8 @@ DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 def page_setup(title: str, icon: str = "🚍") -> None:
     st.set_page_config(page_title=f"ETS Pulse - {title}", page_icon=icon,
                        layout="wide", initial_sidebar_state="expanded")
+    sync_history()
+    ensure_data()
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -128,6 +138,44 @@ def live_vehicles() -> pd.DataFrame:
     if df.empty:
         return load_vehicles()
     return df
+
+
+def _download_real_db() -> bool:
+    """Grab the accumulated real database the collector publishes, if it exists.
+
+    Returns True only when a valid SQLite file was downloaded and saved.
+    """
+    try:
+        import requests
+        resp = requests.get(DATA_DB_URL, timeout=30)
+    except Exception:
+        return False
+    if resp.status_code != 200 or len(resp.content) < 2000:
+        return False
+    if not resp.content[:16].startswith(b"SQLite format 3"):
+        return False
+    try:
+        config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        config.DB_PATH.write_bytes(resp.content)
+    except Exception:
+        return False
+    return True
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def sync_history() -> int:
+    """Pull the latest real database published by the scheduled collector.
+
+    Rechecked every 10 minutes so accumulating history shows up without a
+    redeploy. Returns the observation count after syncing, or -1 if nothing
+    was pulled (e.g. the collector hasn't published anything yet).
+    """
+    if not _download_real_db():
+        return -1
+    load_all_observations.clear()
+    load_vehicles.clear()
+    counts = database.table_counts()
+    return counts.get("delay_observations", 0)
 
 
 def data_available() -> bool:
