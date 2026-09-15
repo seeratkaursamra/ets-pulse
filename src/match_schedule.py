@@ -1,15 +1,14 @@
-"""Match GTFS-Realtime predictions to the static schedule.
+"""Match realtime predictions back to the static schedule.
 
-Edmonton's realtime trip updates usually provide a predicted absolute arrival
-time but not the delay, and often omit route_id. To compute a real delay we need
-the *scheduled* arrival, which lives in the static feed:
+ETS trip updates usually give a predicted arrival time but no delay, and often
+leave out route_id. To get a real delay we need the scheduled arrival from the
+static feed:
 
     scheduled = start_date (service day) + stop_times.arrival_time
     delay_seconds = predicted - scheduled
 
-This module loads the static schedule once into in-memory lookups and exposes
-helpers to resolve a scheduled epoch and a route for a given trip. GTFS times
-past 24:00:00 are handled on the correct service day.
+The schedule is loaded once into in-memory lookups. GTFS times past 24:00:00 are
+handled on the right service day.
 """
 from __future__ import annotations
 
@@ -23,15 +22,12 @@ LOCAL = ZoneInfo(config.LOCAL_TZ)
 
 
 class ScheduleIndex:
-    """In-memory index of the static schedule for fast realtime matching."""
+    """In-memory view of the schedule, keyed for quick lookups."""
 
     def __init__(self) -> None:
-        # trip_id -> {stop_sequence(int): arrival_time_str}
-        self._sched: dict[str, dict[int, str]] = {}
-        # trip_id -> {stop_id(str): arrival_time_str}  (fallback match)
-        self._sched_by_stop: dict[str, dict[str, str]] = {}
-        # trip_id -> route_id
-        self._trip_route: dict[str, str] = {}
+        self._sched: dict[str, dict[int, str]] = {}          # trip -> {seq: time}
+        self._sched_by_stop: dict[str, dict[str, str]] = {}  # trip -> {stop: time}
+        self._trip_route: dict[str, str] = {}                # trip -> route
         self.loaded = False
 
     def load(self) -> "ScheduleIndex":
@@ -67,14 +63,15 @@ class ScheduleIndex:
 
     def scheduled_epoch(self, trip_id: str | None, stop_sequence, stop_id,
                         start_date: str | None) -> int | None:
-        """Return the scheduled arrival as a UTC epoch, or None if unmatched.
+        """Scheduled arrival as a UTC epoch, or None if we can't match it.
 
-        start_date is the GTFS trip start_date (YYYYMMDD) marking the service day.
+        start_date is the trip's GTFS start_date (YYYYMMDD), i.e. the service day.
         """
         if not trip_id or not start_date:
             return None
         trip_id = str(trip_id)
 
+        # match on stop_sequence first, fall back to stop_id
         arrival = None
         if stop_sequence is not None:
             try:
