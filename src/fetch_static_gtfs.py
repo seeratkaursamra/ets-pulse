@@ -1,7 +1,7 @@
-"""Download and load the static GTFS schedule (routes, stops, trips, times).
+"""Download and read the static GTFS schedule (routes, stops, trips, times).
 
-The static feed rarely changes, so we cache the zip under data/static/ and only
-re-download when asked. Loaders return pandas DataFrames.
+The static feed barely changes, so the zip is cached under data/static/ and only
+re-downloaded when asked. Loaders hand back DataFrames.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ STATIC_ZIP = config.STATIC_DIR / "gtfs_static.zip"
 
 
 def download_static(url: str | None = None, force: bool = False) -> Path:
-    """Download the GTFS static zip to data/static/. Returns the local path."""
+    """Grab the GTFS zip into data/static/ and return its path."""
     url = url or config.GTFS_STATIC_URL
     config.STATIC_DIR.mkdir(parents=True, exist_ok=True)
     if STATIC_ZIP.exists() and not force:
@@ -30,7 +30,7 @@ def download_static(url: str | None = None, force: bool = False) -> Path:
 
 
 def _read_from_zip(name: str, zip_path: Path | None = None) -> pd.DataFrame:
-    """Read a single .txt member from the GTFS zip into a DataFrame."""
+    """Read one .txt file out of the GTFS zip."""
     zip_path = Path(zip_path or STATIC_ZIP)
     if not zip_path.exists():
         return pd.DataFrame()
@@ -71,7 +71,7 @@ def load_trips(zip_path: Path | None = None) -> pd.DataFrame:
 
 
 def load_stop_times(zip_path: Path | None = None) -> pd.DataFrame:
-    """stop_times can be large; return the columns we need for matching."""
+    """stop_times is big, so just return the columns matching needs."""
     df = _read_from_zip("stop_times.txt", zip_path)
     if df.empty:
         return df
